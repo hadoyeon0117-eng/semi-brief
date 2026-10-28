@@ -1,0 +1,36 @@
+name: 반도체 데일리 브리핑 자동 갱신
+
+on:
+  schedule:
+    - cron: "17 22 * * *"   # 매일 07:17 (한국 시간)
+  workflow_dispatch: {}      # Actions 탭에서 수동 실행
+
+permissions:
+  contents: write
+
+concurrency:
+  group: daily-brief
+  cancel-in-progress: false
+
+jobs:
+  brief:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: 브리핑 생성
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_MODEL: ${{ vars.CLAUDE_MODEL }}
+        run: python scripts/make_brief.py
+      - name: 커밋 & 푸시 (Vercel 자동 재배포)
+        run: |
+          git config user.name "brief-bot"
+          git config user.email "brief-bot@users.noreply.github.com"
+          git add index.html briefs
+          git diff --cached --quiet && echo "변경 없음" && exit 0
+          git commit -m "브리핑 $(TZ=Asia/Seoul date +%F)"
+          git push
